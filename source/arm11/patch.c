@@ -32,6 +32,9 @@
 
 #define min(a, b)  ((size_t) (a) <= (size_t) (b) ? (size_t) (a) : (size_t) (b))
 
+#define UPS_MAGIC_SIZE 4
+#define UPS_CRC_SIZE 4 * 3
+
 
 typedef struct
 {
@@ -158,8 +161,17 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 		return RES_OUT_OF_MEM;
 	}
 
+	// Reject patches shorter than header + CRC hashes.
+	// Compute length minus hashes when done.
+	u32 patchSize = fSize(patchHandle);
+	if(patchSize < UPS_MAGIC_SIZE + UPS_CRC_SIZE) {
+		free(cache.buffer);
+		return RES_INVALID_PATCH;
+	}
+	patchSize -= UPS_CRC_SIZE;
+
 	//read data into cache for first time
-	cache.cacheSize = min(cache.maxCacheSize, (fSize(patchHandle)-12)-fTell(patchHandle));
+	cache.cacheSize = min(cache.maxCacheSize, patchSize);
 	res = fRead(patchHandle, cache.buffer, cache.cacheSize, NULL);
 	if(res != RES_OK) { free(cache.buffer); return res; }
 
@@ -204,13 +216,11 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 		memset((char*)(LGY_ROM_LOC + baseRomSize), 0x00u, patchedRomSize - baseRomSize); //fill new patch area with 0's
 	}
 
-	uintmax_t patchFileSize = fSize(patchHandle);
-
-	uintmax_t offset = 0;
+	u32 offset = 0;
 	u8 readByte = 0;
 	u8 *romBytes = ((u8*)LGY_ROM_LOC);
 
-	while(fTell(patchHandle) < (patchFileSize-12) && res==RES_OK) {
+	while(fTell(patchHandle) < patchSize && res == RES_OK) {
 		offset += read_vuint(patchHandle, &res, &cache);
 		if(res != RES_OK) break;
 
