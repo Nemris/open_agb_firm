@@ -191,16 +191,16 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 
 		debug_printf("Base size:    0x%lx\nPatched size: 0x%lx\n", baseRomSize, patchedRomSize);
 
-		if(patchedRomSize > baseRomSize) {
-			//scale up rom
-			*romSize = nextPow2(patchedRomSize);
-			//check if upscaled rom is too big
-			if(*romSize > LGY_MAX_ROM_SIZE) {
-				ee_puts("Patched ROM exceeds 32MB! Skipping patching...");
-				free(cache.buffer);
-				return RES_INVALID_PATCH; 
-			}
+		// Patched ROMs greater than 32MiB are always invalid.
+		if(patchedRomSize > LGY_MAX_ROM_SIZE) {
+			ee_puts("Patched ROM exceeds 32MiB! Skipping patching...");
+			free(cache.buffer);
+			return RES_INVALID_PATCH;
+		}
 
+		// Scale up ROM if needed.
+		if(patchedRomSize > baseRomSize) {
+			*romSize = nextPow2(patchedRomSize);
 			memset((char*)(LGY_ROM_LOC + baseRomSize), 0xFFu, *romSize - baseRomSize); //fill out extra rom space
 			memset((char*)(LGY_ROM_LOC + baseRomSize), 0x00u, patchedRomSize - baseRomSize); //fill new patch area with 0's
 		}
