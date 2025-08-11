@@ -167,7 +167,7 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	}
 	patchSize -= UPS_CRC_SIZE;
 
-	//read data into cache for first time
+	// Try to perform initial caching.
 	cache.cacheSize = min(cache.maxCacheSize, patchSize);
 	Result res = fRead(patchHandle, cache.buffer, cache.cacheSize, NULL);
 	if(res != RES_OK)
@@ -179,22 +179,12 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	ee_puts("UPS patch found! Patching...");
 
 	// Verify the patch is indeed UPS.
-	u8 magic[] = {'U', 'P', 'S', '1'};
-	for(u8 i = 0; i < sizeof(magic) / sizeof(magic[0]); i++)
-	{
-		u8 c = readCache(patchHandle, &cache, &res);
-		if(res != RES_OK) break;
-		if(c != magic[i])
-		{
-			res = RES_INVALID_PATCH;
-			break;
-		}
-	}
-	if(res != RES_OK)
+	if(memcmp("UPS1", cache.buffer, UPS_MAGIC_SIZE) != 0)
 	{
 		free(cache.buffer);
-		return res;
+		return RES_INVALID_PATCH;
 	}
+	cache.cacheOffset += UPS_MAGIC_SIZE;
 
 	// Get unpatched and patched ROM sizes.
 	u32 baseRomSize = (u32)read_vuint(patchHandle, &res, &cache);
