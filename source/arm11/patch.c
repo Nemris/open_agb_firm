@@ -35,7 +35,6 @@
 #define UPS_MAGIC_SIZE 4
 #define UPS_CRC_SIZE 4 * 3
 
-
 typedef struct
 {
 	u8 *buffer;
@@ -43,6 +42,14 @@ typedef struct
 	u16 offset;
 	u16 capacity;
 } Cache;
+
+typedef struct
+{
+	FHandle handle;
+	u32 size;
+	u32 baseRomSize;
+	u32 patchedRomSize;
+} UPSPatch;
 
 
 
@@ -148,6 +155,33 @@ static uintmax_t read_vuint(const FHandle patchFile, Result *res, Cache *cache) 
 	return result;
 }
 
+// This function expects that the first chunk of the UPS patch is cached.
+static Result loadUPSMetadata(UPSPatch *patch, Cache *cache)
+{
+	// Check magic.
+	if(memcmp("UPS1", cache->buffer, UPS_MAGIC_SIZE) != 0) return RES_INVALID_PATCH;
+	cache->offset += UPS_MAGIC_SIZE;
+
+	// Decode base and patched ROM sizes.
+	Result res = RES_OK;
+	patch->baseRomSize = (u32)read_vuint(patch->handle, &res, cache);
+	if(res != RES_OK) return res;
+
+	patch->patchedRomSize = (u32)read_vuint(patch->handle, &res, cache);
+	if(res != RES_OK) return res;
+
+	debug_printf("Base size:    0x%lx\nPatched size: 0x%lx\n", patch->baseRomSize, patch->patchedRomSize);
+
+	// Patches that would result in a ROM bigger than 32MiB are invalid.
+	if(patch->patchedRomSize > LGY_MAX_ROM_SIZE)
+	{
+		ee_puts("Patched ROM exceeds 32MiB! Skipping patching...");
+		return RES_INVALID_PATCH;
+	}
+
+	return res;
+}
+
 static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	Cache cache = {
 		(u8*)calloc(512, 1), // Buffer.
@@ -167,9 +201,16 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	}
 	patchSize -= UPS_CRC_SIZE;
 
+	UPSPatch patch = {
+		patchHandle,
+		patchSize,   // Patch file size minus CRC-32 hashes.
+		0,           // Base ROM size.
+		0            // Patched ROM size.
+	};
+
 	// Try to perform initial caching.
-	cache.size = min(cache.capacity, patchSize);
-	Result res = fRead(patchHandle, cache.buffer, cache.size, NULL);
+	cache.size = min(cache.capacity, patch.size);
+	Result res = fRead(patch.handle, cache.buffer, cache.size, NULL);
 	if(res != RES_OK)
 	{
 		free(cache.buffer);
@@ -178,59 +219,33 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 
 	ee_puts("UPS patch found! Patching...");
 
-	// Verify the patch is indeed UPS.
-	if(memcmp("UPS1", cache.buffer, UPS_MAGIC_SIZE) != 0)
-	{
-		free(cache.buffer);
-		return RES_INVALID_PATCH;
-	}
-	cache.offset += UPS_MAGIC_SIZE;
-
-	// Get unpatched and patched ROM sizes.
-	u32 baseRomSize = (u32)read_vuint(patchHandle, &res, &cache);
-	if(res != RES_OK)
+	// Validate the patch and load the metadata.
+	if((res = loadUPSMetadata(&patch, &cache)) != RES_OK)
 	{
 		free(cache.buffer);
 		return res;
-	}
-	u32 patchedRomSize = (u32)read_vuint(patchHandle, &res, &cache);
-	if(res != RES_OK)
-	{
-		free(cache.buffer);
-		return res;
-	}
-
-	debug_printf("Base size:    0x%lx\nPatched size: 0x%lx\n", baseRomSize, patchedRomSize);
-
-	// Patched ROMs greater than 32MiB are always invalid.
-	// Patches are always valid past this check.
-	if(patchedRomSize > LGY_MAX_ROM_SIZE)
-	{
-		ee_puts("Patched ROM exceeds 32MiB! Skipping patching...");
-		free(cache.buffer);
-		return RES_INVALID_PATCH;
 	}
 
 	// Scale up ROM if needed.
-	if(patchedRomSize > baseRomSize)
+	if(patch.patchedRomSize > patch.baseRomSize)
 	{
-		*romSize = nextPow2(patchedRomSize);
-		memset((char*)(LGY_ROM_LOC + baseRomSize), 0xFFu, *romSize - baseRomSize); //fill out extra rom space
-		memset((char*)(LGY_ROM_LOC + baseRomSize), 0x00u, patchedRomSize - baseRomSize); //fill new patch area with 0's
+		*romSize = nextPow2(patch.patchedRomSize);
+		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0xFFu, *romSize - patch.baseRomSize); //fill out extra rom space
+		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0x00u, patch.patchedRomSize - patch.baseRomSize); //fill new patch area with 0's
 	}
 
 	u32 offset = 0;
 	u8 readByte = 0;
 	u8 *romBytes = ((u8*)LGY_ROM_LOC);
 
-	while(fTell(patchHandle) < patchSize && res == RES_OK)
+	while(fTell(patch.handle) < patch.size && res == RES_OK)
 	{
-		offset += read_vuint(patchHandle, &res, &cache);
+		offset += read_vuint(patch.handle, &res, &cache);
 		if(res != RES_OK) break;
 
 		while(offset<*romSize)
 		{
-			readByte = readCache(patchHandle, &cache, &res);
+			readByte = readCache(patch.handle, &cache, &res);
 			if(res != RES_OK) break;
 
 			if(readByte == 0x00)
