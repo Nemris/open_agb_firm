@@ -39,19 +39,19 @@
 typedef struct
 {
 	u8 *buffer;
-	u16 cacheSize;
-	u16 cacheOffset;
-	u16 maxCacheSize;
+	u16 size;
+	u16 offset;
+	u16 capacity;
 } Cache;
 
 
 
 static u8 readCache(const FHandle patchHandle, Cache *cache, Result *res) {
-	u8 result = (cache->buffer)[(cache->cacheOffset)++];
-	if((cache->cacheOffset) >= (cache->cacheSize)) {
-		(cache->cacheSize) = min((cache->maxCacheSize), ((fSize(patchHandle)-12) - fTell(patchHandle)));
-		*res = fRead(patchHandle, (cache->buffer), (cache->cacheSize), NULL);
-		(cache->cacheOffset) = 0;
+	u8 result = (cache->buffer)[(cache->offset)++];
+	if((cache->offset) >= (cache->capacity)) {
+		(cache->size) = min((cache->capacity), ((fSize(patchHandle)-12) - fTell(patchHandle)));
+		*res = fRead(patchHandle, (cache->buffer), (cache->size), NULL);
+		(cache->offset) = 0;
 	}
 
 	return result;
@@ -150,10 +150,10 @@ static uintmax_t read_vuint(const FHandle patchFile, Result *res, Cache *cache) 
 
 static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	Cache cache = {
-		(u8*)calloc(512, 1), //buffer
-		0,                   //cache size
-		0,                   //cache offset
-		512                  //max cache size
+		(u8*)calloc(512, 1), // Buffer.
+		0,                   // Size.
+		0,                   // Offset.
+		512                  // Capacity.
 	};
 	if(cache.buffer == NULL) return RES_OUT_OF_MEM;
 
@@ -168,8 +168,8 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	patchSize -= UPS_CRC_SIZE;
 
 	// Try to perform initial caching.
-	cache.cacheSize = min(cache.maxCacheSize, patchSize);
-	Result res = fRead(patchHandle, cache.buffer, cache.cacheSize, NULL);
+	cache.size = min(cache.capacity, patchSize);
+	Result res = fRead(patchHandle, cache.buffer, cache.size, NULL);
 	if(res != RES_OK)
 	{
 		free(cache.buffer);
@@ -184,7 +184,7 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 		free(cache.buffer);
 		return RES_INVALID_PATCH;
 	}
-	cache.cacheOffset += UPS_MAGIC_SIZE;
+	cache.offset += UPS_MAGIC_SIZE;
 
 	// Get unpatched and patched ROM sizes.
 	u32 baseRomSize = (u32)read_vuint(patchHandle, &res, &cache);
