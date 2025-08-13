@@ -53,15 +53,18 @@ typedef struct
 
 
 
-static u8 readCache(const FHandle patchHandle, Cache *cache, Result *res) {
-	u8 result = (cache->buffer)[(cache->offset)++];
-	if((cache->offset) >= (cache->capacity)) {
-		(cache->size) = min((cache->capacity), ((fSize(patchHandle)-12) - fTell(patchHandle)));
-		*res = fRead(patchHandle, (cache->buffer), (cache->size), NULL);
-		(cache->offset) = 0;
+static u8 readCache(const UPSPatch *patch, Cache *cache, Result *res)
+{
+	u8 byte = cache->buffer[cache->offset++];
+
+	// Load new block of data from patch if needed.
+	if(cache->offset >= cache->capacity) {
+		cache->size = min(cache->capacity, patch->size - fTell(patch->handle));
+		*res = fRead(patch->handle, cache->buffer, cache->size, NULL);
+		cache->offset = 0;
 	}
 
-	return result;
+	return byte;
 }
 
 static Result patchIPS(const FHandle patchHandle) {
@@ -136,13 +139,13 @@ static Result patchIPS(const FHandle patchHandle) {
 }
 
 //based on code from http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format) (CC0, No copyright)
-static uintmax_t read_vuint(const FHandle patchFile, Result *res, Cache *cache) {
+static uintmax_t read_vuint(const UPSPatch *patch, Result *res, Cache *cache) {
 	uintmax_t result = 0, shift = 0;
 
 	uint8_t octet = 0;
 	for (;;) {
 		//*res = fRead(patchFile, &octet, 1, NULL);
-		octet = readCache(patchFile, cache, res);
+		octet = readCache(patch, cache, res);
 		if(*res != RES_OK) break;
 		if(octet & 0x80) {
 			result += (octet & 0x7f) << shift;
@@ -164,10 +167,10 @@ static Result loadUPSMetadata(UPSPatch *patch, Cache *cache)
 
 	// Decode base and patched ROM sizes.
 	Result res = RES_OK;
-	patch->baseRomSize = (u32)read_vuint(patch->handle, &res, cache);
+	patch->baseRomSize = (u32)read_vuint(patch, &res, cache);
 	if(res != RES_OK) return res;
 
-	patch->patchedRomSize = (u32)read_vuint(patch->handle, &res, cache);
+	patch->patchedRomSize = (u32)read_vuint(patch, &res, cache);
 	if(res != RES_OK) return res;
 
 	debug_printf("Base size:    0x%lx\nPatched size: 0x%lx\n", patch->baseRomSize, patch->patchedRomSize);
@@ -240,12 +243,12 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 
 	while(fTell(patch.handle) < patch.size && res == RES_OK)
 	{
-		offset += read_vuint(patch.handle, &res, &cache);
+		offset += read_vuint(&patch, &res, &cache);
 		if(res != RES_OK) break;
 
 		while(offset<*romSize)
 		{
-			readByte = readCache(patch.handle, &cache, &res);
+			readByte = readCache(&patch, &cache, &res);
 			if(res != RES_OK) break;
 
 			if(readByte == 0x00)
