@@ -191,22 +191,12 @@ static Result loadUPSMetadata(UPSPatch *patch, Cache *cache)
 }
 
 static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
-	Cache cache = {
-		(u8*)calloc(512, 1), // Buffer.
-		0,                   // Size.
-		0,                   // Offset.
-		512                  // Capacity.
-	};
-	if(cache.buffer == NULL) return RES_OUT_OF_MEM;
+	ee_puts("UPS patch found! Patching...");
 
 	// Reject patches shorter than header + CRC hashes.
 	// Compute length minus hashes when done.
 	u32 patchSize = fSize(patchHandle);
-	if(patchSize < UPS_MAGIC_SIZE + UPS_CRC_SIZE)
-	{
-		free(cache.buffer);
-		return RES_INVALID_PATCH;
-	}
+	if(patchSize < UPS_MAGIC_SIZE + UPS_CRC_SIZE) return RES_INVALID_PATCH;
 	patchSize -= UPS_CRC_SIZE;
 
 	UPSPatch patch = {
@@ -217,15 +207,20 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	};
 
 	// Try to perform initial caching.
-	cache.size = min(cache.capacity, patch.size);
+	Cache cache = {
+		(u8*)calloc(512, 1),  // Buffer.
+		min(512, patch.size), // Size.
+		0,                    // Offset.
+		512                   // Capacity.
+	};
+	if(cache.buffer == NULL) return RES_OUT_OF_MEM;
+
 	Result res = fRead(patch.handle, cache.buffer, cache.size, NULL);
 	if(res != RES_OK)
 	{
 		free(cache.buffer);
 		return res;
 	}
-
-	ee_puts("UPS patch found! Patching...");
 
 	// Validate the patch and load the metadata.
 	if((res = loadUPSMetadata(&patch, &cache)) != RES_OK)
