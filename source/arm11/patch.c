@@ -67,6 +67,11 @@ static u8 readCache(const UPSPatch *patch, Cache *cache, Result *res)
 	return byte;
 }
 
+static bool hasDataLeft(const Cache *cache)
+{
+	return cache->offset < cache->size;
+}
+
 static Result patchIPS(const FHandle patchHandle) {
 	ee_puts("IPS patch found! Patching...");
 
@@ -240,7 +245,7 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	// Patch the ROM.
 	u32 offset = 0;
 	u8 *romBytes = ((u8*)LGY_ROM_LOC);
-	while(fTell(patch.handle) < patch.size && res == RES_OK)
+	while(hasDataLeft(&cache) && res == RES_OK)
 	{
 		offset += read_vuint(&patch, &res, &cache);
 		if(res != RES_OK) break;
