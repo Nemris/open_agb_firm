@@ -237,26 +237,27 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0x00u, patch.patchedRomSize - patch.baseRomSize); //fill new patch area with 0's
 	}
 
+	// Patch the ROM.
 	u32 offset = 0;
-	u8 readByte = 0;
 	u8 *romBytes = ((u8*)LGY_ROM_LOC);
-
 	while(fTell(patch.handle) < patch.size && res == RES_OK)
 	{
 		offset += read_vuint(&patch, &res, &cache);
 		if(res != RES_OK) break;
 
-		while(offset<*romSize)
+		// Use the expected exact ROM size.
+		while(offset < patch.patchedRomSize)
 		{
-			readByte = readCache(&patch, &cache, &res);
+			u8 mask = readCache(&patch, &cache, &res);
 			if(res != RES_OK) break;
 
-			if(readByte == 0x00)
+			// Skip to the next block of changes if this one is over.
+			if(mask == 0x00)
 			{
 				offset++;
 				break;
 			}
-			romBytes[offset] ^= readByte;
+			romBytes[offset] ^= mask;
 			offset++;
 		}
 	}
