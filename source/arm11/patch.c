@@ -144,12 +144,12 @@ static Result patchIPS(const FHandle patchHandle) {
 }
 
 //based on code from http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format) (CC0, No copyright)
-static uintmax_t read_vuint(const UPSPatch *patch, Result *res, Cache *cache) {
-	uintmax_t result = 0, shift = 0;
+static u32 read_vuint(const UPSPatch *patch, Result *res, Cache *cache)
+{
+	u32 result = 0, shift = 0;
 
-	uint8_t octet = 0;
+	u8 octet = 0;
 	for (;;) {
-		//*res = fRead(patchFile, &octet, 1, NULL);
 		octet = readCache(patch, cache, res);
 		if(*res != RES_OK) break;
 		if(octet & 0x80) {
@@ -172,10 +172,10 @@ static Result loadUPSMetadata(UPSPatch *patch, Cache *cache)
 
 	// Decode base and patched ROM sizes.
 	Result res = RES_OK;
-	patch->baseRomSize = (u32)read_vuint(patch, &res, cache);
+	patch->baseRomSize = read_vuint(patch, &res, cache);
 	if(res != RES_OK) return res;
 
-	patch->patchedRomSize = (u32)read_vuint(patch, &res, cache);
+	patch->patchedRomSize = read_vuint(patch, &res, cache);
 	if(res != RES_OK) return res;
 
 	debug_printf("Base size:    0x%lx\nPatched size: 0x%lx\n", patch->baseRomSize, patch->patchedRomSize);
