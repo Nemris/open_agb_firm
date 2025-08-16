@@ -22,6 +22,9 @@
 #include "oaf_error_codes.h"
 #include "util.h"
 #include "arm11/drivers/hid.h"
+#ifndef NDEBUG
+#include "arm11/drivers/mcu.h"
+#endif
 #include "drivers/lgy_common.h"
 #include "arm11/fmt.h"
 #include "fs.h"
@@ -52,6 +55,21 @@ typedef struct
 } UPSPatch;
 
 
+
+#ifndef NDEBUG
+static u8 elapsedSecs(const RtcTimeDate *before, const RtcTimeDate *after)
+{
+	// RtcTimeDate seconds are represented as hex, i.e. the 59th second is 0x59.
+	// Convert those to decimal so we can do decent math on them.
+	u8 beforeSecs = (before->sec / 16 * 10) + (before->sec % 16);
+	u8 afterSecs = (after->sec / 16 * 10) + (after->sec % 16);
+
+	// NOTE: only accounts for the first minute boundary.
+	if(afterSecs < beforeSecs) afterSecs += 60;
+
+	return afterSecs - beforeSecs;
+}
+#endif
 
 static u8 readCache(const UPSPatch *patch, Cache *cache, Result *res)
 {
@@ -308,7 +326,15 @@ Result patchRom(const char *const gamePath, u32 *romSize) {
 
 		if ((res = fOpen(&f, strcat(patchPathBase, "ups"), FA_OPEN_EXISTING | FA_READ)) == RES_OK) 
 		{
+#ifndef NDEBUG
+			RtcTimeDate before, after;
+			MCU_getRtcTimeDate(&before);
+#endif
 			res = patchUPS(f, romSize);
+#ifndef NDEBUG
+			MCU_getRtcTimeDate(&after);
+			debug_printf("Patching took: %us\n", elapsedSecs(&before, &after));
+#endif
 
 			if(res != RES_OK && res != RES_INVALID_PATCH) {
 				ee_puts("An error has occurred while patching.\nContinuing is NOT recommended!\n\nPress Y+UP to proceed");
