@@ -35,8 +35,9 @@
 
 #define min(a, b)  ((size_t) (a) <= (size_t) (b) ? (size_t) (a) : (size_t) (b))
 
-#define UPS_MAGIC_SIZE 4
-#define UPS_CRC_SIZE 4 * 3
+#define BUFFER_CAPACITY  512
+#define UPS_MAGIC_SIZE   4
+#define UPS_CRC_SIZE     4 * 3
 
 typedef struct
 {
@@ -102,7 +103,7 @@ static bool hasDataLeft(const Cache *cache)
 static Result patchIPS(const FHandle patchHandle) {
 	ee_puts("IPS patch found! Patching...");
 
-	const u16 bufferSize = 512;
+	const u16 bufferSize = BUFFER_CAPACITY;
 	char *buffer = (char*)calloc(bufferSize, 1);
 	if(buffer == NULL) return RES_OUT_OF_MEM;
 
@@ -235,11 +236,11 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 
 	// Try to perform initial caching.
 	Cache cache = {
-		(u8*)calloc(512, 1),  // Buffer.
-		min(512, patch.size), // Size.
-		0,                    // Offset.
-		512,                  // Capacity.
-		0,                    // Total bytes read.
+		(u8*)calloc(BUFFER_CAPACITY, 1),  // Buffer.
+		min(BUFFER_CAPACITY, patch.size), // Size.
+		0,                                // Offset.
+		BUFFER_CAPACITY,                  // Capacity.
+		0,                                // Total bytes read.
 	};
 	if(cache.buffer == NULL) return RES_OUT_OF_MEM;
 
