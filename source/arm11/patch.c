@@ -44,6 +44,7 @@ typedef struct
 	u16 size;
 	u16 offset;
 	u16 capacity;
+	u32 totalRead;
 } Cache;
 
 typedef struct
@@ -71,16 +72,24 @@ static u8 elapsedSecs(const RtcTimeDate *before, const RtcTimeDate *after)
 }
 #endif
 
+static u32 loadCache(const UPSPatch *patch, Cache *cache, Result *res)
+{
+	u32 bytesRead = 0;
+
+	cache->offset = 0;
+	cache->size = min(cache->capacity, patch->size - cache->totalRead);
+	*res = fRead(patch->handle, cache->buffer, cache->size, &bytesRead);
+	cache->totalRead += bytesRead;
+
+	return bytesRead;
+}
+
 static u8 readCache(const UPSPatch *patch, Cache *cache, Result *res)
 {
 	u8 byte = cache->buffer[cache->offset++];
 
 	// Load new block of data from patch if needed.
-	if(cache->offset >= cache->capacity) {
-		cache->size = min(cache->capacity, patch->size - fTell(patch->handle));
-		*res = fRead(patch->handle, cache->buffer, cache->size, NULL);
-		cache->offset = 0;
-	}
+	if(cache->offset >= cache->capacity) loadCache(patch, cache, res);
 
 	return byte;
 }
@@ -229,11 +238,13 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 		(u8*)calloc(512, 1),  // Buffer.
 		min(512, patch.size), // Size.
 		0,                    // Offset.
-		512                   // Capacity.
+		512,                  // Capacity.
+		0,                    // Total bytes read.
 	};
 	if(cache.buffer == NULL) return RES_OUT_OF_MEM;
 
-	Result res = fRead(patch.handle, cache.buffer, cache.size, NULL);
+	Result res;
+	loadCache(&patch, &cache, &res);
 	if(res != RES_OK)
 	{
 		free(cache.buffer);
