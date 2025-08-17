@@ -127,7 +127,7 @@ typedef struct
 } ColorProfile;
 
 // libretro shader values. Credits: hunterk and Pokefan531.
-// Last updated 2014-12-03.
+// Last updated 2024-12-03.
 static const ColorProfile g_colorProfiles[8] =
 {
 	{ // libretro GBA color (sRGB).
@@ -187,12 +187,12 @@ static const ColorProfile g_colorProfiles[8] =
 		1.f / 1.45f
 	},
 	{ // Identity.
-		1.f,
+		2.2f,
 		1.f,
 		1.f, 0.f, 0.f,
 		0.f, 1.f, 0.f,
 		0.f, 0.f, 1.f,
-		1.f / 1.f
+		1.f / 2.2f
 	}
 };
 
