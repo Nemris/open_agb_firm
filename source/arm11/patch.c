@@ -263,8 +263,10 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 	if(patch.patchedRomSize > patch.baseRomSize)
 	{
 		*romSize = nextPow2(patch.patchedRomSize);
-		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0xFFu, *romSize - patch.baseRomSize); //fill out extra rom space
-		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0x00u, patch.patchedRomSize - patch.baseRomSize); //fill new patch area with 0's
+		// Zero extra ROM space to be patched.
+		memset((char*)(LGY_ROM_LOC + patch.baseRomSize), 0x00, patch.patchedRomSize - patch.baseRomSize);
+		// Pad up to the end of the virtual cart.
+		memset((char*)(LGY_ROM_LOC + patch.patchedRomSize), 0xFF, *romSize - patch.patchedRomSize);
 	}
 
 	// Patch the ROM.
