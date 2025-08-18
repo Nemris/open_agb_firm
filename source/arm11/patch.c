@@ -73,16 +73,14 @@ static u8 elapsedSecs(const RtcTimeDate *before, const RtcTimeDate *after)
 }
 #endif
 
-static u32 loadCache(const UPSPatch *patch, Cache *cache, Result *res)
+static u16 loadCache(const UPSPatch *patch, Cache *cache, Result *res)
 {
-	u32 bytesRead = 0;
-
-	cache->offset = 0;
 	cache->size = min(cache->capacity, patch->size - cache->totalRead);
-	*res = fRead(patch->handle, cache->buffer, cache->size, &bytesRead);
-	cache->totalRead += bytesRead;
+	*res = fRead(patch->handle, cache->buffer, cache->size, NULL);
+	cache->totalRead += cache->size;  // We already computed how much will be read.
+	cache->offset = 0;
 
-	return bytesRead;
+	return cache->size;
 }
 
 static u8 readCache(const UPSPatch *patch, Cache *cache, Result *res)
@@ -283,14 +281,11 @@ static Result patchUPS(const FHandle patchHandle, u32 *romSize) {
 			u8 mask = readCache(&patch, &cache, &res);
 			if(res != RES_OK) break;
 
-			// Skip to the next block of changes if this one is over.
-			if(mask == 0x00)
-			{
-				offset++;
-				break;
-			}
 			romBytes[offset] ^= mask;
 			offset++;
+
+			// Skip to the next block of changes if this one is over.
+			if(mask == 0x00) break;
 		}
 	}
 
