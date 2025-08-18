@@ -35,7 +35,7 @@
 
 #define min(a, b)  ((size_t) (a) <= (size_t) (b) ? (size_t) (a) : (size_t) (b))
 
-#define BUFFER_CAPACITY  512
+#define BUFFER_CAPACITY  4096
 #define UPS_MAGIC_SIZE   4
 #define UPS_CRC_SIZE     4 * 3
 
